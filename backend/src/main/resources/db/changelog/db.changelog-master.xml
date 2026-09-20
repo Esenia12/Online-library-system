@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.0.xsd">
+
+    <changeSet id="1" author="jules">
+        <sqlFile path="changes/001-initial-schema.sql" relativeToChangelogFile="true"/>
+    </changeSet>
+    <changeSet id="2" author="jules">
+        <!-- Accept previously-calculated checksum and the new one (added after editing the SQL) -->
+        <validCheckSum>9:d3dfb3bdb4b7f9facb546ff2ada0a2e5</validCheckSum>
+        <validCheckSum>9:9293e0a5a8c0eaaafff9d28d3c2203ff</validCheckSum>
+        <sqlFile path="changes/002-insert-initial-data.sql" relativeToChangelogFile="true"/>
+    </changeSet>
+    <changeSet id="3" author="viledan">
+        <sqlFile path="changes/003-add-cascade-delete.sql" relativeToChangelogFile="true"/>
+    </changeSet>
+    <changeSet id="4" author="viledan">
+        <sqlFile path="changes/004-add-set-null-reviews.sql" relativeToChangelogFile="true"/>
+    </changeSet>
+    <!-- Skipping changeSet 5 - creator_id for categories not needed -->
+    <changeSet id="6" author="viledan">
+        <sqlFile path="changes/006-add-set-null-articles.sql" relativeToChangelogFile="true"/>
+    </changeSet>
+    <changeSet id="7" author="viledan">
+        <sqlFile path="changes/007-add-set-null-articles-new.sql" relativeToChangelogFile="true"/>
+    </changeSet>
+
+</databaseChangeLog>
