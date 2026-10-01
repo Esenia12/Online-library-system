@@ -1,0 +1,20 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  infrastructure-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Validate Linting Configs
+        run: |
+          echo "Checking ESLint and Checkstyle configurations..."
+          test -f frontend/.eslintrc.json && echo "Frontend OK"
+          test -f backend/build.gradle && echo "Backend OK"
+      - name: Mock Tests & JaCoCo
+        run: echo "JaCoCo is configured in build.gradle. Waiting for src/ code."

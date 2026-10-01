@@ -1,0 +1,8 @@
+plugins {
+    id 'java'
+    id 'checkstyle'
+    id 'jacoco'
+}
+checkstyle {
+    toolVersion = '10.12.0'
+}
