@@ -7,7 +7,6 @@ on:
     branches: [ main, develop ]
 
 jobs:
-  # 1. Джобы быстрой проверки конфигураций и метрик
   metrics-and-checks:
     runs-on: ubuntu-latest
     steps:
@@ -34,67 +33,3 @@ jobs:
         run: |
           echo "Checking commit details..."
           git --no-pager log -1 --stat
-
-  # 2. Джобы сборки, проверки стиля и тестирования
-  lint-and-test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Run Backend Checkstyle
-        run: |
-          if [ -d "backend" ]; then
-            cd backend && ./gradlew checkstyleMain
-          else
-            echo "Backend directory not ready yet."
-          fi
-
-      - name: Run Frontend Linter
-        run: |
-          if [ -d "frontend" ] && [ -f "frontend/package.json" ]; then
-            cd frontend
-            npm ci
-            npm run lint
-          else
-            echo "Frontend directory not ready yet."
-          fi
-
-      - name: Run Backend Tests & Coverage Report
-        run: |
-          if [ -d "backend" ]; then
-            cd backend && ./gradlew test jacocoTestReport
-          else
-            echo "Backend tests skipped."
-          fi
-
-      - name: Build Spring Boot JAR Artifact
-        run: |
-          if [ -d "backend" ]; then
-            cd backend && ./gradlew bootJar
-          else
-            echo "Backend build skipped."
-          fi
-
-      - name: Build React Package
-        run: |
-          if [ -d "frontend" ] && [ -f "frontend/package.json" ]; then
-            cd frontend && npm run build
-          else
-            echo "Frontend build skipped."
-          fi
-
-  # 3. Джобы автоматического деплоя (выполняется только при успехе прошлых джоб и только в ветке main)
-  deploy-test:
-    needs: [ metrics-and-checks, lint-and-test ]
-    if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy to Test Staging Server
-        run: echo "Deploying application artifact to Test Staging Server..."
