@@ -13,23 +13,54 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Check Linter Configs
+      - name: Check Linter Configs (Stub)
         run: |
-          echo "Checking Linter configurations..."
-          if [ -f frontend/.eslintrc.json ]; then echo "Frontend ESLint OK"; fi
-          if [ -f backend/build.gradle ]; then echo "Backend Checkstyle OK"; fi
+          echo "Проверка наличия конфигурационных файлов..."
+          if [ -f frontend/.eslintrc.json ]; then 
+            echo "Frontend ESLint конфигурация найдена"
+          else 
+            echo "Frontend ESLint конфигурация отсутствует (ожидается)"
+          fi
+          
+          if [ -f backend/build.gradle ]; then 
+            echo "Backend Checkstyle/JaCoCo конфигурация найдена"
+          else 
+            echo "Backend конфигурация отсутствует (ожидается)"
+          fi
 
-      - name: Mock Test Execution
+      - name: Generate Quality Metrics Report (Stub/Заглушка)
         run: |
-          echo "Running unit tests..."
-          echo "Tests run: 0 (Waiting for src code). Pass Rate: 100%"
+          echo "Генерация отчета о метриках качества..."
+          
+          LINT_ERRORS=0
+          LINT_WARNINGS=0
+          CODE_COVERAGE="0%"
+          BRANCH_COVERAGE="0%"
+          CYCLOMATIC_COMPLEXITY="N/A"
+          DEFECT_DENSITY="0.00"
+          TECH_DEBT="0 ч."
+          TOTAL_LOC=0
 
-      - name: Mock Code Coverage
-        run: |
-          echo "JaCoCo plugin configured in build.gradle."
-          echo "Target coverage set to >= 80%"
+          cat << EOF >> $GITHUB_STEP_SUMMARY
 
-      - name: Check Commit Size
-        run: |
-          echo "Checking commit details..."
-          git --no-pager log -1 --stat
+          | Метрика | Значение | Статус |
+          | :--- | :---: | :---: |
+          | **Ошибки линтера** | $LINT_ERRORS |
+          | **Предупреждения линтера** | $LINT_WARNINGS |
+          | **Покрытие кода тестами** | $CODE_COVERAGE |
+          | **Покрытие ветвлений** | $BRANCH_COVERAGE |
+          | **Цикломатическая сложность** | $CYCLOMATIC_COMPLEXITY |
+          | **Плотность дефектов (на 1000 LOC)**| $DEFECT_DENSITY |
+          | **Технический долг (оценка)** | $TECH_DEBT |
+          | **Всего строк кода (LOC)** | $TOTAL_LOC |
+
+          
+          
+          echo "Таблица метрик успешно сформирована и добавлена в Summary пайплайна."
+          
+          echo "--------------------------------------------------"
+          echo "Сводка метрик:"
+          echo "   - Ошибки линтера: $LINT_ERRORS"
+          echo "   - Покрытие кода: $CODE_COVERAGE"
+          echo "   - Строк кода (LOC): $TOTAL_LOC"
+          echo "--------------------------------------------------"
