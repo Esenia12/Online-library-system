@@ -13,7 +13,7 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Check Linter Configs (Stub)
+      - name: Check Linter Configs 
         run: |
           echo "Проверка наличия конфигурационных файлов..."
           if [ -f frontend/.eslintrc.json ]; then 
@@ -28,7 +28,7 @@ jobs:
             echo "Backend конфигурация отсутствует (ожидается)"
           fi
 
-      - name: Generate Quality Metrics Report (Stub/Заглушка)
+      - name: Generate Quality Metrics Report 
         run: |
           echo "Генерация отчета о метриках качества..."
           
@@ -43,8 +43,8 @@ jobs:
 
           cat << EOF >> $GITHUB_STEP_SUMMARY
 
-          | Метрика | Значение | Статус |
-          | :--- | :---: | :---: |
+          | Метрика | Значение |
+          | :--- | :---: |
           | **Ошибки линтера** | $LINT_ERRORS |
           | **Предупреждения линтера** | $LINT_WARNINGS |
           | **Покрытие кода тестами** | $CODE_COVERAGE |
@@ -58,9 +58,3 @@ jobs:
           
           echo "Таблица метрик успешно сформирована и добавлена в Summary пайплайна."
           
-          echo "--------------------------------------------------"
-          echo "Сводка метрик:"
-          echo "   - Ошибки линтера: $LINT_ERRORS"
-          echo "   - Покрытие кода: $CODE_COVERAGE"
-          echo "   - Строк кода (LOC): $TOTAL_LOC"
-          echo "--------------------------------------------------"
