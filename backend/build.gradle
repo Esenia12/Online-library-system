@@ -40,6 +40,7 @@ dependencies {
 
 checkstyle {
     toolVersion = '10.12.0'
+    configFile = file("${rootDir}/config/checkstyle/checkstyle.xml")
     ignoreFailures = true
     maxWarnings = 1000
     maxErrors = 1000
