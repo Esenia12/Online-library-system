@@ -13,48 +13,145 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Check Linter Configs 
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Backend - Checkstyle
+        run: ./gradlew :backend:checkstyleMain :backend:checkstyleTest --no-daemon
+        continue-on-error: true
+
+      - name: Backend - Tests
+        run: ./gradlew :backend:test --no-daemon
+        continue-on-error: true
+
+      - name: Backend - JaCoCo Report
+        run: ./gradlew :backend:jacocoTestReport --no-daemon
+        continue-on-error: true
+
+      - name: Frontend - Install dependencies
+        working-directory: ./frontend
+        run: npm install --legacy-peer-deps
+        continue-on-error: true
+
+      - name: Frontend - ESLint
+        working-directory: ./frontend
+        run: npx eslint src --ext .js,.jsx --format json --output-file eslint-report.json
+        continue-on-error: true
+
+      - name: Frontend - Tests with coverage
+        working-directory: ./frontend
+        run: CI=true npm test -- --coverage --watchAll=false --coverageReporters=json-summary --coverageReporters=text
+        continue-on-error: true
+
+      - name: Generate Quality Metrics Report
         run: |
-          echo "Проверка наличия конфигурационных файлов..."
-          if [ -f frontend/.eslintrc.json ]; then 
-            echo "Frontend ESLint конфигурация найдена"
-          else 
-            echo "Frontend ESLint конфигурация отсутствует (ожидается)"
-          fi
-          
-          if [ -f backend/build.gradle ]; then 
-            echo "Backend Checkstyle/JaCoCo конфигурация найдена"
-          else 
-            echo "Backend конфигурация отсутствует (ожидается)"
+          set +e
+          echo "Сбор реальных метрик..."
+
+          # ---------- ESLint ----------
+          ESLINT_ERRORS=0
+          ESLINT_WARNINGS=0
+          if [ -f frontend/eslint-report.json ]; then
+            ESLINT_ERRORS=$(jq '[.[] | .errorCount] | add // 0' frontend/eslint-report.json)
+            ESLINT_WARNINGS=$(jq '[.[] | .warningCount] | add // 0' frontend/eslint-report.json)
           fi
 
-      - name: Generate Quality Metrics Report 
-        run: |
-          echo "Генерация отчета о метриках качества..."
-          
-          LINT_ERRORS=0
-          LINT_WARNINGS=0
-          CODE_COVERAGE="0%"
+          # ---------- Checkstyle ----------
+          CHECKSTYLE_ERRORS=0
+          CHECKSTYLE_WARNINGS=0
+          for f in backend/build/reports/checkstyle/*.xml; do
+            if [ -f "$f" ]; then
+              CHECKSTYLE_ERRORS=$((CHECKSTYLE_ERRORS + $(grep -o 'severity="error"' "$f" | wc -l)))
+              CHECKSTYLE_WARNINGS=$((CHECKSTYLE_WARNINGS + $(grep -o 'severity="warning"' "$f" | wc -l)))
+            fi
+          done
+
+          TOTAL_LINT_ERRORS=$((ESLINT_ERRORS + CHECKSTYLE_ERRORS))
+          TOTAL_LINT_WARNINGS=$((ESLINT_WARNINGS + CHECKSTYLE_WARNINGS))
+
+          # ---------- JaCoCo ----------
+          LINE_COVERAGE="0%"
           BRANCH_COVERAGE="0%"
-          CYCLOMATIC_COMPLEXITY="N/A"
+          CYCLOMATIC_COMPLEXITY=0
+          JACOCO_CSV="backend/build/reports/jacoco/test/jacocoTestReport.csv"
+          if [ -f "$JACOCO_CSV" ]; then
+            LINE_MISSED=$(awk -F, 'NR>1 {s+=$8} END {print s+0}' "$JACOCO_CSV")
+            LINE_COVERED=$(awk -F, 'NR>1 {s+=$9} END {print s+0}' "$JACOCO_CSV")
+            BRANCH_MISSED=$(awk -F, 'NR>1 {s+=$6} END {print s+0}' "$JACOCO_CSV")
+            BRANCH_COVERED=$(awk -F, 'NR>1 {s+=$7} END {print s+0}' "$JACOCO_CSV")
+            COMPLEXITY_MISSED=$(awk -F, 'NR>1 {s+=$10} END {print s+0}' "$JACOCO_CSV")
+            COMPLEXITY_COVERED=$(awk -F, 'NR>1 {s+=$11} END {print s+0}' "$JACOCO_CSV")
+
+            TOTAL_LINES=$((LINE_MISSED + LINE_COVERED))
+            TOTAL_BRANCHES=$((BRANCH_MISSED + BRANCH_COVERED))
+            CYCLOMATIC_COMPLEXITY=$((COMPLEXITY_MISSED + COMPLEXITY_COVERED))
+
+            if [ "$TOTAL_LINES" -gt 0 ]; then
+              LINE_COVERAGE=$(awk -v c="$LINE_COVERED" -v t="$TOTAL_LINES" 'BEGIN {printf "%.1f%%", (c/t)*100}')
+            fi
+            if [ "$TOTAL_BRANCHES" -gt 0 ]; then
+              BRANCH_COVERAGE=$(awk -v c="$BRANCH_COVERED" -v t="$TOTAL_BRANCHES" 'BEGIN {printf "%.1f%%", (c/t)*100}')
+            fi
+          fi
+
+          # ---------- LOC ----------
+          JAVA_LOC=0
+          if [ -d backend/src ]; then
+            JAVA_LOC=$(find backend/src -name '*.java' -exec cat {} + 2>/dev/null | wc -l)
+          fi
+          JS_LOC=0
+          if [ -d frontend/src ]; then
+            JS_LOC=$(find frontend/src -type f \( -name '*.js' -o -name '*.jsx' \) -exec cat {} + 2>/dev/null | wc -l)
+          fi
+          TOTAL_LOC=$((JAVA_LOC + JS_LOC))
+
+          # ---------- Defect density ----------
           DEFECT_DENSITY="0.00"
-          TECH_DEBT="0 ч."
-          TOTAL_LOC=0
+          if [ "$TOTAL_LOC" -gt 0 ]; then
+            DEFECT_DENSITY=$(awk -v e="$TOTAL_LINT_ERRORS" -v l="$TOTAL_LOC" 'BEGIN {printf "%.2f", (e/l)*1000}')
+          fi
 
-          cat << EOF >> $GITHUB_STEP_SUMMARY
+          # ---------- Test count ----------
+          BACKEND_TESTS=0
+          if [ -d backend/build/test-results/test ]; then
+            BACKEND_TESTS=$(grep -ho 'tests="[0-9]*"' backend/build/test-results/test/*.xml 2>/dev/null | grep -o '[0-9]*' | awk '{s+=$1} END {print s+0}')
+          fi
 
-          | Метрика | Значение |
-          | :--- | :---: |
-          | **Ошибки линтера** | $LINT_ERRORS |
-          | **Предупреждения линтера** | $LINT_WARNINGS |
-          | **Покрытие кода тестами** | $CODE_COVERAGE |
-          | **Покрытие ветвлений** | $BRANCH_COVERAGE |
-          | **Цикломатическая сложность** | $CYCLOMATIC_COMPLEXITY |
-          | **Плотность дефектов (на 1000 LOC)**| $DEFECT_DENSITY |
-          | **Технический долг (оценка)** | $TECH_DEBT |
-          | **Всего строк кода (LOC)** | $TOTAL_LOC |
+          FRONTEND_TEST_FILES=0
+          if [ -d frontend/src ]; then
+            FRONTEND_TEST_FILES=$(find frontend/src -type f \( -name '*.test.js' -o -name '*.test.jsx' \) 2>/dev/null | wc -l)
+          fi
 
-          
-          
-          echo "Таблица метрик успешно сформирована и добавлена в Summary пайплайна."
-          
+          # ---------- Summary ----------
+          {
+            echo "### 📊 Отчёт о качестве кода"
+            echo ""
+            echo "| Метрика | Значение |"
+            echo "| :--- | :---: |"
+            echo "| **Ошибки линтера (ESLint + Checkstyle)** | $TOTAL_LINT_ERRORS |"
+            echo "| **Предупреждения линтера** | $TOTAL_LINT_WARNINGS |"
+            echo "| **Покрытие кода тестами (JaCoCo)** | $LINE_COVERAGE |"
+            echo "| **Покрытие ветвлений (JaCoCo)** | $BRANCH_COVERAGE |"
+            echo "| **Цикломатическая сложность** | $CYCLOMATIC_COMPLEXITY |"
+            echo "| **Плотность дефектов (на 1000 LOC)** | $DEFECT_DENSITY |"
+            echo "| **Всего строк кода (Java + JS)** | $TOTAL_LOC |"
+            echo "| **Java LOC** | $JAVA_LOC |"
+            echo "| **JS LOC** | $JS_LOC |"
+            echo "| **Backend тестов (JUnit)** | $BACKEND_TESTS |"
+            echo "| **Frontend test-файлов (Jest)** | $FRONTEND_TEST_FILES |"
+            echo ""
+            echo "> Отчёт собран из реальных отчётов линтеров (ESLint JSON, Checkstyle XML), тестов (JUnit XML) и покрытия (JaCoCo CSV)."
+          } >> $GITHUB_STEP_SUMMARY
+
+          echo "Готово. Таблица в Summary."
