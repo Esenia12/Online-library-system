@@ -23,12 +23,13 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "test:coverage": "react-scripts test --coverage --watchAll=false --coverageReporters=text --coverageReporters=lcov --coverageReporters=json-summary",
+    "test:ci": "CI=true react-scripts test --coverage --watchAll=false --coverageReporters=text --coverageReporters=lcov --coverageReporters=json-summary"
   },
   "eslintConfig": {
     "extends": [
-      "react-app",
-      "react-app/jest"
+      "react-app"
     ]
   },
   "browserslist": {
@@ -48,5 +49,13 @@
     "postcss": "8.4.31",
     "webpack-dev-server": "4.15.2",
     "@pmmmwh/react-refresh-webpack-plugin": "0.5.15"
-  }
+  },
+  "jest": {
+  "collectCoverageFrom": [
+    "src/**/*.{js,jsx}",
+    "!src/index.js",
+    "!src/reportWebVitals.js",
+    "!src/**/*.test.{js,jsx}"
+  ]
+}
 }

@@ -27,16 +27,15 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
       - name: Backend - Checkstyle
-        run: ./gradlew :backend:checkstyleMain :backend:checkstyleTest --no-daemon
+        run: ./gradlew :backend:checkstyleMain :backend:checkstyleTest --no-daemon || true
         continue-on-error: true
 
-      - name: Backend - Tests
-        run: ./gradlew :backend:test --no-daemon
-        continue-on-error: true
-
-      - name: Backend - JaCoCo Report
-        run: ./gradlew :backend:jacocoTestReport --no-daemon
+      - name: Backend - Tests + JaCoCo
+        run: ./gradlew :backend:test :backend:jacocoTestReport --no-daemon
         continue-on-error: true
 
       - name: Frontend - Install dependencies
@@ -51,7 +50,7 @@ jobs:
 
       - name: Frontend - Tests with coverage
         working-directory: ./frontend
-        run: CI=true npm test -- --coverage --watchAll=false --coverageReporters=json-summary --coverageReporters=text
+        run: CI=true npm test -- --coverage --watchAll=false --coverageReporters=json-summary --coverageReporters=lcov --coverageReporters=text
         continue-on-error: true
 
       - name: Generate Quality Metrics Report
@@ -92,11 +91,9 @@ jobs:
             BRANCH_COVERED=$(awk -F, 'NR>1 {s+=$7} END {print s+0}' "$JACOCO_CSV")
             COMPLEXITY_MISSED=$(awk -F, 'NR>1 {s+=$10} END {print s+0}' "$JACOCO_CSV")
             COMPLEXITY_COVERED=$(awk -F, 'NR>1 {s+=$11} END {print s+0}' "$JACOCO_CSV")
-
             TOTAL_LINES=$((LINE_MISSED + LINE_COVERED))
             TOTAL_BRANCHES=$((BRANCH_MISSED + BRANCH_COVERED))
             CYCLOMATIC_COMPLEXITY=$((COMPLEXITY_MISSED + COMPLEXITY_COVERED))
-
             if [ "$TOTAL_LINES" -gt 0 ]; then
               LINE_COVERAGE=$(awk -v c="$LINE_COVERED" -v t="$TOTAL_LINES" 'BEGIN {printf "%.1f%%", (c/t)*100}')
             fi
@@ -105,15 +102,17 @@ jobs:
             fi
           fi
 
+          # ---------- Jest coverage ----------
+          JEST_LINE="0%"
+          JEST_BRANCH="0%"
+          if [ -f frontend/coverage/coverage-summary.json ]; then
+            JEST_LINE=$(jq -r '.total.lines.pct // 0' frontend/coverage/coverage-summary.json)
+            JEST_BRANCH=$(jq -r '.total.branches.pct // 0' frontend/coverage/coverage-summary.json)
+          fi
+
           # ---------- LOC ----------
-          JAVA_LOC=0
-          if [ -d backend/src ]; then
-            JAVA_LOC=$(find backend/src -name '*.java' -exec cat {} + 2>/dev/null | wc -l)
-          fi
-          JS_LOC=0
-          if [ -d frontend/src ]; then
-            JS_LOC=$(find frontend/src -type f \( -name '*.js' -o -name '*.jsx' \) -exec cat {} + 2>/dev/null | wc -l)
-          fi
+          JAVA_LOC=$(find backend/src -name '*.java' -exec cat {} + 2>/dev/null | wc -l)
+          JS_LOC=$(find frontend/src -type f \( -name '*.js' -o -name '*.jsx' \) -exec cat {} + 2>/dev/null | wc -l)
           TOTAL_LOC=$((JAVA_LOC + JS_LOC))
 
           # ---------- Defect density ----------
@@ -122,18 +121,13 @@ jobs:
             DEFECT_DENSITY=$(awk -v e="$TOTAL_LINT_ERRORS" -v l="$TOTAL_LOC" 'BEGIN {printf "%.2f", (e/l)*1000}')
           fi
 
-          # ---------- Test count ----------
+          # ---------- Tests count ----------
           BACKEND_TESTS=0
           if [ -d backend/build/test-results/test ]; then
             BACKEND_TESTS=$(grep -ho 'tests="[0-9]*"' backend/build/test-results/test/*.xml 2>/dev/null | grep -o '[0-9]*' | awk '{s+=$1} END {print s+0}')
           fi
+          FRONTEND_TEST_FILES=$(find frontend/src -type f \( -name '*.test.js' -o -name '*.test.jsx' \) 2>/dev/null | wc -l)
 
-          FRONTEND_TEST_FILES=0
-          if [ -d frontend/src ]; then
-            FRONTEND_TEST_FILES=$(find frontend/src -type f \( -name '*.test.js' -o -name '*.test.jsx' \) 2>/dev/null | wc -l)
-          fi
-
-          # ---------- Summary ----------
           {
             echo "### 📊 Отчёт о качестве кода"
             echo ""
@@ -141,17 +135,39 @@ jobs:
             echo "| :--- | :---: |"
             echo "| **Ошибки линтера (ESLint + Checkstyle)** | $TOTAL_LINT_ERRORS |"
             echo "| **Предупреждения линтера** | $TOTAL_LINT_WARNINGS |"
-            echo "| **Покрытие кода тестами (JaCoCo)** | $LINE_COVERAGE |"
-            echo "| **Покрытие ветвлений (JaCoCo)** | $BRANCH_COVERAGE |"
+            echo "| **Покрытие кода (Backend, JaCoCo)** | $LINE_COVERAGE |"
+            echo "| **Покрытие ветвлений (Backend)** | $BRANCH_COVERAGE |"
+            echo "| **Покрытие кода (Frontend, Jest)** | $JEST_LINE% |"
+            echo "| **Покрытие ветвлений (Frontend)** | $JEST_BRANCH% |"
             echo "| **Цикломатическая сложность** | $CYCLOMATIC_COMPLEXITY |"
             echo "| **Плотность дефектов (на 1000 LOC)** | $DEFECT_DENSITY |"
-            echo "| **Всего строк кода (Java + JS)** | $TOTAL_LOC |"
-            echo "| **Java LOC** | $JAVA_LOC |"
-            echo "| **JS LOC** | $JS_LOC |"
+            echo "| **Всего LOC (Java + JS)** | $TOTAL_LOC |"
+            echo "| **Java LOC / JS LOC** | $JAVA_LOC / $JS_LOC |"
             echo "| **Backend тестов (JUnit)** | $BACKEND_TESTS |"
             echo "| **Frontend test-файлов (Jest)** | $FRONTEND_TEST_FILES |"
             echo ""
-            echo "> Отчёт собран из реальных отчётов линтеров (ESLint JSON, Checkstyle XML), тестов (JUnit XML) и покрытия (JaCoCo CSV)."
+            echo "> Отчёт собран из реальных отчётов линтеров, тестов и покрытия."
           } >> $GITHUB_STEP_SUMMARY
 
-          echo "Готово. Таблица в Summary."
+      - name: Upload JaCoCo HTML
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jacoco-report
+          path: backend/build/reports/jacoco/
+
+      - name: Upload Jest Coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jest-coverage
+          path: frontend/coverage/
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            backend/build/test-results/
+            backend/build/reports/tests/

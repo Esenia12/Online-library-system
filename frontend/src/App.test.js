@@ -14,6 +14,15 @@ test('renders navigation bar', () => {
   expect(nav).toBeInTheDocument();
 
   // Проверяем, что есть хотя бы одна ссылка с href="/home"
-  const homeLink = screen.getByRole('link', { name: /home/i });
-  expect(homeLink).toHaveAttribute('href', '/home');
+  //const homeLink = screen.getByRole('link', { name: /home/i });
+  //expect(homeLink).toHaveAttribute('href', '/home');
+
+  const links = nav.querySelectorAll('a.nav-link');
+  const hrefs = Array.from(links).map((a) => a.getAttribute('href'));
+  expect(hrefs).toContain('/home');
+  expect(hrefs).toContain('/categories');
 });
+
+
+
+ 
